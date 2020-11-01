@@ -1,0 +1,157 @@
+format PE console
+entry start
+
+include 'win32a.inc'
+;-------------------------------------------------------------------------------
+;Ïîïîâ Àíäðåé ÁÏÈ197 Âàðèàíò 16
+;Ðàçðàáîòàòü ïðîãðàììó, âû÷èñëÿþùóþ ñ
+;ïîìîùüþ ñòåïåííîãî ðÿäà ñ òî÷íîñòüþ íå
+;õóæå 0,1% çíà÷åíèå ôóíêöèè arccos(õ) äëÿ
+;çàäàííîãî ïàðàìåòðà x (èñïîëüçîâàòü FPU)
+;-------------------------------------------------------------------------------
+;
+;-------------------------------------------------------------------------------
+section '.data' data readable writable
+
+        strQuestion db 'Input x: ', 0
+        tFormat db '%lf', 0
+        strAnswer db 'arccos(x) = %1.10f', 10, 0
+        strWrong db 'wrongInput! x should be in [-0.5, 0.5] run again', 10, 0
+
+        x dq ?
+        e dq 0.00000001
+        arccos dq 1.57079632679
+        addFloat dq 1.0
+        i dq 1.0
+        elem dq 1.0
+        minX dq -0.5
+        maxX dq  0.5
+        tmp dq ?
+        tmpesp dd ?
+;-------------------------------------------------------------------------------
+section '.code' code readable executable
+start:
+        FINIT
+        call input  ;input data
+        call getArccos    ; arccos search
+        invoke printf, strAnswer, dword[arccos], dword[arccos + 4] ;output answer
+        jmp finish
+;-------------------------------------------------------------------------------
+input:
+        mov [tmpesp], esp
+        invoke printf, strQuestion ;write question for data
+        invoke scanf, tFormat, x  ;read data
+        mov esp, [tmpesp]
+
+        ;checking data
+        FLD [x]
+        FLD [minX]
+        FXCH
+        FCOMI st1
+        jb wrongInput
+
+        FLD [x]
+        FLD [maxX]
+        FXCH
+        FCOMI st1
+        ja wrongInput
+        ret
+
+wrongInput:
+        ;if input is wrong
+        invoke printf, strWrong
+        jmp finish
+;-------------------------------------------------------------------------------
+finish:
+        call [getch]
+        push 0
+        call [ExitProcess]
+;-------------------------------------------------------------------------------
+getArccos:
+        ;add first elem to sum
+        FLD [arccos]
+        FSUB [x]
+        FSTP [arccos]
+
+
+        ;add second elem to sum
+        FLD [elem]    ;
+        FMUL [x]
+        FMUL [x]
+        FMUL [x]
+        FSTP [elem]
+
+        FLD [i]
+        FADD [addFloat]
+        FSTP [i]
+
+        FLD [elem]
+        FDIV [i]
+        FSTP [elem]
+
+        FLD [i]
+        FADD [addFloat]
+        FSTP [i]
+
+        FLD [elem]
+        FDIV [i]
+        FSTP [elem]
+
+        FLD [arccos]
+        FSUB [elem]
+        FSTP [arccos]
+;-------------------------------------------------------------------------------
+startLoop:
+        ;adding new elem n sum
+        ;----------------------
+        FLD [elem]                 ;elem *= x * x
+        FMUL [x]
+        FMUL [x]
+
+        FMUL [i]
+        FMUL [i]                  ;elem *= 2*i
+        FSTP [elem]
+
+        FLD [i]
+        FADD [addFloat]           ; i++
+        FSTP [i]
+
+        FLD [elem]
+        FDIV [i]                  ; elem /= i
+        FSTP [elem]
+
+        FLD [i]
+        FADD [addFloat]           ; i++
+        FSTP [i]
+
+        FLD [elem]
+        FDIV [i]                  ; elem /= i
+        FSTP [elem]
+
+
+        FLD [elem]
+        FLD [e]
+        FXCH
+        FCOMI st1                  ;checking if new element lower that e
+        jb endLoop
+
+        FSTP [tmp]
+        FLD [arccos]
+        FSUB [tmp]                ;arccos -= elem[i]
+        FSTP [arccos]
+        jmp startLoop
+;-------------------------------------------------------------------------------
+endLoop:
+        ret
+;-------------------------------------------------------------------------------
+section '.idata' import data readable
+    library kernel, 'kernel32.dll',\
+            msvcrt, 'msvcrt.dll'
+
+    import kernel,\
+           ExitProcess, 'ExitProcess'
+    import msvcrt,\
+           printf, 'printf',\
+           sprintf, 'sprintf',\
+           scanf, 'scanf',\
+           getch, '_getch'    
